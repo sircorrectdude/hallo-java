@@ -15,7 +15,7 @@ spec:
       containers:
         - name: app
           # Wird von der Pipeline gesetzt – nicht von Hand ändern
-          image: ghcr.io/DEIN-NAME/hallo-java:initial
+          image: ghcr.io/sircorrectdude/hallo-java:a85b25c
           ports:
             - name: http
               containerPort: 8080
