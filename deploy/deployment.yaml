@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hallo-java
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hallo-java
+  template:
+    metadata:
+      labels:
+        app: hallo-java
+    spec:
+      containers:
+        - name: app
+          # Wird von der Pipeline gesetzt – nicht von Hand ändern
+          image: ghcr.io/DEIN-NAME/hallo-java:initial
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

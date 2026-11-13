@@ -1,0 +1,53 @@
+# Pipeline: Push nach main → Image ghcr.io/<owner>/hallo-java:<commit-sha> → Tag im Manifest (GitOps)
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "deploy/**"       # Manifest-Commits der Pipeline lösen sie nicht erneut aus
+
+permissions:
+  contents: write         # Manifest-Commit nach main
+  packages: write         # Image nach ghcr.io
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code holen
+        uses: actions/checkout@v4
+
+      - name: Image-Name und Tag festlegen (Tag = kurzer Commit-Hash)
+        id: v
+        run: |
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Image bauen (noch nicht hochladen)
+        run: docker build -t "${{ steps.v.outputs.image }}:${{ steps.v.outputs.tag }}" .
+
+      - name: Sicherheits-Scan wie in Modul 02 (bricht bei behebbaren HIGH/CRITICAL ab)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest \
+            image --exit-code 1 --ignore-unfixed --severity HIGH,CRITICAL \
+            "${{ steps.v.outputs.image }}:${{ steps.v.outputs.tag }}"
+
+      - name: Bei ghcr.io anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image hochladen
+        run: docker push "${{ steps.v.outputs.image }}:${{ steps.v.outputs.tag }}"
+
+      - name: Neuen Tag ins Manifest schreiben und nach main committen
+        run: |
+          sed -i "s#image: .*hallo-java:.*#image: ${{ steps.v.outputs.image }}:${{ steps.v.outputs.tag }}#" deploy/deployment.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add deploy/deployment.yaml
+          git diff --cached --quiet || git commit -m "deploy: hallo-java ${{ steps.v.outputs.tag }}"
+          git push origin main
